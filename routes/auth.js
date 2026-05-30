@@ -12,28 +12,45 @@ const SECRET = "mysecretkey";
 // 🟢 REGISTER
 // =========================
 router.post('/register', async (req, res) => {
+
   const { name, email, password } = req.body;
 
   try {
-    // 1. نشفر الباسورد
-    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 2. نحفظ المستخدم
+    const existingUser = await db.query(
+      'SELECT id FROM users WHERE email=$1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        error: 'Email already exists'
+      });
+    }
+
+    const hashedPassword =
+      await bcrypt.hash(password, 10);
+
     const result = await db.query(
-      `INSERT INTO users(name, email, password)
-       VALUES($1, $2, $3)
-       RETURNING id, name, email`,
+      `INSERT INTO users(name,email,password)
+       VALUES($1,$2,$3)
+       RETURNING id,name,email`,
       [name, email, hashedPassword]
     );
 
     res.json({
-      message: "User created successfully",
+      message: 'User created successfully',
       user: result.rows[0]
     });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    res.status(500).json({
+      error: err.message
+    });
+
   }
+
 });
 
 
