@@ -5,7 +5,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 // 🔐 Secret Key (هنحسنها بعدين في .env)
-const SECRET = "mysecretkey";
+const SECRET = process.env.JWT_SECRET;
+//const SECRET = "mysecretkey";
 
 
 // =========================
@@ -32,16 +33,48 @@ router.post('/register', async (req, res) => {
       await bcrypt.hash(password, 10);
 
     const result = await db.query(
-      `INSERT INTO users(name,email,password)
-       VALUES($1,$2,$3)
-       RETURNING id,name,email`,
-      [name, email, hashedPassword]
-    );
+  `INSERT INTO users(
+      name,
+      email,
+      password,
+      is_demo,
+      max_customers,
+      max_installments
+    )
+   VALUES(
+      $1,
+      $2,
+      $3,
+      true,
+      2,
+      10
+    )
+   RETURNING id,name,email,is_demo`,
+  [name, email, hashedPassword]
+);
 
-    res.json({
-      message: 'User created successfully',
-      user: result.rows[0]
-    });
+   // res.json({
+   //   message: 'User created successfully',
+   //   user: result.rows[0]
+  //  });
+  const user = result.rows[0];
+
+const token = jwt.sign(
+  {
+    id: user.id,
+    email: user.email
+  },
+  SECRET,
+  {
+    expiresIn: '7d'
+  }
+);
+
+res.json({
+  message: 'User created successfully',
+  token,
+  user
+});
 
   } catch (err) {
 
