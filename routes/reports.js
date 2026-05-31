@@ -169,6 +169,8 @@ AS "totalRemaining"
 
 );
 
+console.log(result.rows[0]);
+
 res.json(
 result.rows[0]
 );
