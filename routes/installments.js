@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const PDFDocument = require('pdfkit');
 
 // ➕ إضافة قسط + توليد الأقساط
 
@@ -1353,5 +1354,158 @@ id=$1
     }
 
   });
+
+  //انشاء pdf
+  router.get(
+  '/:id/contract',
+  auth,
+  async (req, res) => {
+
+    try {
+
+      const user_id = req.user.id;
+
+      const installmentId =
+        req.params.id;
+
+      const contract =
+        await db.query(
+          `
+SELECT
+i.*,
+c.name AS customer_name
+FROM installments i
+JOIN customers c
+ON c.id=i.customer_id
+WHERE i.id=$1
+AND i.user_id=$2
+`,
+          [
+            installmentId,
+            user_id
+          ]
+        );
+
+      if (
+        contract.rows.length === 0
+      ) {
+
+        return res
+          .status(404)
+          .json({
+            error:
+              'Contract not found'
+          });
+
+      }
+
+      const details =
+        await db.query(
+          `
+SELECT *
+FROM installment_details
+WHERE installment_id=$1
+ORDER BY due_date
+`,
+          [installmentId]
+        );
+
+      const data =
+        contract.rows[0];
+
+      const doc =
+        new PDFDocument();
+
+      res.setHeader(
+        'Content-Type',
+        'application/pdf'
+      );
+
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=contract_${installmentId}.pdf`
+      );
+
+      doc.pipe(res);
+
+      doc.fontSize(20)
+        .text(
+          'Installment Contract'
+        );
+
+      doc.moveDown();
+
+      doc.text(
+        `Customer: ${data.customer_name}`
+      );
+
+      doc.text(
+        `Total Amount: ${data.total_amount}`
+      );
+
+      doc.text(
+        `Down Payment: ${data.down_payment}`
+      );
+
+      doc.text(
+        `Installment Value: ${data.installment_value}`
+      );
+
+      doc.text(
+        `Installments Count: ${data.installment_count}`
+      );
+
+      doc.moveDown();
+
+      doc.text(
+        'Installments Schedule'
+      );
+
+      doc.moveDown();
+
+      details.rows.forEach(
+        (
+          item,
+          index
+        ) => {
+
+          doc.text(
+            `${index + 1} - ${item.amount} - ${item.due_date}`
+          );
+
+        }
+      );
+
+      doc.moveDown(2);
+
+      doc.text(
+        'Customer Signature: __________________'
+      );
+
+      doc.moveDown();
+
+      doc.text(
+        'Company Signature: __________________'
+      );
+
+      doc.end();
+
+    }
+
+    catch (err) {
+
+      console.log(err);
+
+      res
+        .status(500)
+        .json({
+          error:
+            err.message
+        });
+
+    }
+
+  }
+);
 
 module.exports = router;
