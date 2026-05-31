@@ -16,8 +16,22 @@ try{
 const user_id=
 req.user.id;
 
+console.log('USER ID = ', user_id);
+
+const test = await db.query(
+`
+SELECT COUNT(*) as count
+FROM installments
+WHERE user_id=$1
+`,
+[user_id]
+);
+
+console.log('INSTALLMENTS = ', test.rows);
+
 const result=
 await db.query(
+    
 
 `
 SELECT
