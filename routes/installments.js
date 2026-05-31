@@ -1358,7 +1358,7 @@ id=$1
   //انشاء pdf
   router.get(
   '/:id/contract',
-  auth,
+ // auth,
   async (req, res) => {
 
     try {
