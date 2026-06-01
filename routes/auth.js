@@ -8,6 +8,9 @@ const jwt = require('jsonwebtoken');
 const SECRET = process.env.JWT_SECRET;
 //const SECRET = "mysecretkey";
 
+const bcrypt =
+require('bcrypt');
+
 
 // =========================
 // 🟢 REGISTER
@@ -131,6 +134,166 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+//Route لجلب بيانات المستخدم
+
+router.get(
+'/profile',
+auth,
+async(req,res)=>{
+
+try{
+
+const result=
+await db.query(
+
+`
+SELECT
+
+id,
+name,
+email,
+created_at
+
+FROM users
+
+WHERE id=$1
+`,
+[
+req.user.id
+]
+
+);
+
+res.json(
+result.rows[0]
+);
+
+}
+catch(err){
+
+res.status(500).json({
+
+error:
+err.message
+
+});
+
+}
+
+});
+
+//تغيير كلمه السر 
+router.put(
+'/change-password',
+auth,
+async(req,res)=>{
+
+try{
+
+const {
+currentPassword,
+newPassword
+}
+=
+req.body;
+
+const user=
+await db.query(
+
+`
+SELECT *
+FROM users
+WHERE id=$1
+`,
+[
+req.user.id
+]
+
+);
+
+if(
+user.rows.length===0
+){
+
+return res
+.status(404)
+.json({
+
+error:
+'User not found'
+
+});
+
+}
+
+const isValid=
+await bcrypt.compare(
+
+currentPassword,
+
+user.rows[0]
+.password
+
+);
+
+if(
+!isValid
+){
+
+return res
+.status(400)
+.json({
+
+error:
+'Current password is incorrect'
+
+});
+
+}
+
+const hashed=
+await bcrypt.hash(
+newPassword,
+10
+);
+
+await db.query(
+
+`
+UPDATE users
+SET password=$1
+WHERE id=$2
+`,
+
+[
+hashed,
+req.user.id
+]
+
+);
+
+res.json({
+
+message:
+'Password updated'
+
+});
+
+}
+catch(err){
+
+res.status(500)
+.json({
+
+error:
+err.message
+
+});
+
+}
+
 });
 
 module.exports = router;
