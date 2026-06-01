@@ -444,7 +444,8 @@ router.get('/notifications/upcoming', auth, async (req, res) => {
       JOIN customers c ON c.id = i.customer_id
       WHERE i.user_id = $1
       AND d.paid = false
-      AND d.due_date >= CURRENT_DATE - INTERVAL '30 days'
+      AND d.due_date BETWEEN CURRENT_DATE
+                   AND CURRENT_DATE + INTERVAL '7 days'
       
       ORDER BY d.due_date ASC
       `,

@@ -381,5 +381,94 @@ err.message
 
 });
 
+//الاقساط المتاخره 
+router.get(
+'/late-customers',
+auth,
+async(req,res)=>{
+
+try{
+
+const user_id=
+req.user.id;
+
+const result=
+await db.query(
+
+`
+SELECT
+
+c.id,
+c.name,
+c.phone,
+
+COUNT(d.id)
+AS late_count,
+
+COALESCE(
+SUM(
+d.amount -
+COALESCE(d.paid_amount,0)
+),
+0
+)
+AS late_amount,
+
+MIN(d.due_date)
+AS oldest_due
+
+FROM installment_details d
+
+JOIN installments i
+ON i.id=d.installment_id
+
+JOIN customers c
+ON c.id=i.customer_id
+
+WHERE
+
+i.user_id=$1
+
+AND d.status<>'PAID'
+
+AND d.due_date<CURRENT_DATE
+
+GROUP BY
+
+c.id,
+c.name,
+c.phone
+
+ORDER BY
+
+MIN(d.due_date)
+
+`,
+
+[user_id]
+
+);
+
+res.json(
+result.rows
+);
+
+}
+catch(err){
+
+console.log(err);
+
+res.status(500).json({
+
+error:
+err.message
+
+});
+
+}
+
+});
+
+
 module.exports=
 router;
