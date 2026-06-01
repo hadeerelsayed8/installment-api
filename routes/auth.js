@@ -2,14 +2,14 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const bcrypt = require('bcrypt');
+const auth = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 
 // 🔐 Secret Key (هنحسنها بعدين في .env)
 const SECRET = process.env.JWT_SECRET;
 //const SECRET = "mysecretkey";
 
-const bcrypt =
-require('bcrypt');
+
 
 
 // =========================
