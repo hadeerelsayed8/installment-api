@@ -469,6 +469,78 @@ err.message
 
 });
 
+//تفاصيل العملاء المتاخرين
+
+router.get(
+'/late-customers/:id',
+auth,
+async(req,res)=>{
+
+try{
+
+const user_id =
+req.user.id;
+
+const customer_id =
+req.params.id;
+
+const result =
+await db.query(
+
+`
+SELECT
+
+d.id,
+d.amount,
+d.paid_amount,
+
+(
+d.amount -
+COALESCE(d.paid_amount,0)
+)
+
+AS remaining,
+
+d.due_date,
+d.status
+
+FROM installment_details d
+
+JOIN installments i
+ON i.id=d.installment_id
+
+WHERE
+
+i.user_id=$1
+
+AND i.customer_id=$2
+
+AND d.status<>'PAID'
+
+AND d.due_date<CURRENT_DATE
+
+ORDER BY d.due_date
+`,
+
+[user_id,customer_id]
+
+);
+
+res.json(
+result.rows
+);
+
+}
+catch(err){
+
+res.status(500).json({
+error:err.message
+});
+
+}
+
+});
+
 
 module.exports=
 router;
