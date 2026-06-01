@@ -812,110 +812,153 @@ payment_date DESC
   });
 
 // 📊 Dashboard Statistics
-router.get('/dashboard/stats', auth, async (req, res) => {
+router.get(
+'/dashboard/stats',
+auth,
+async(req,res)=>{
 
-  try {
+try{
 
-    const user_id = req.user.id;
+const user_id =
+req.user.id;
 
-    // 👥 عدد العملاء
-    const customersResult = await db.query(
-      `
-      SELECT COUNT(*) AS total_customers
-      FROM customers
-      WHERE user_id = $1
-      `,
-      [user_id]
-    );
+const result =
+await db.query(
 
-    // 💰 عدد العقود
-    const installmentsResult = await db.query(
-      `
-      SELECT COUNT(*) AS total_installments
-      FROM installments
-      WHERE user_id = $1
-      `,
-      [user_id]
-    );
+`
+SELECT
 
-    // ✅ إجمالي المدفوع
-    const paidResult = await db.query(
-      `
-      SELECT COALESCE(SUM(amount), 0) AS total_paid
-      FROM installment_details d
-      JOIN installments i
-      ON i.id = d.installment_id
-      WHERE i.user_id = $1
-      AND d.paid = true
-      `,
-      [user_id]
-    );
-
-    // ⏳ إجمالي المتبقي
-    const unpaidResult = await db.query(
-      `
-      SELECT COALESCE(SUM(amount), 0) AS total_unpaid
-      FROM installment_details d
-      JOIN installments i
-      ON i.id = d.installment_id
-      WHERE i.user_id = $1
-      AND d.paid = false
-      `,
-      [user_id]
-    );
-
-    const overdueResult =
-      await db.query(
-
-        `
+(
 SELECT COUNT(*)
-AS overdue_count
+FROM customers
+WHERE user_id=$1
+)
+AS total_customers,
 
+(
+SELECT COUNT(*)
+FROM installments
+WHERE user_id=$1
+)
+AS total_installments,
+
+(
+SELECT COALESCE(
+SUM(total_amount),
+0
+)
+FROM installments
+WHERE user_id=$1
+)
+AS total_contracts,
+
+(
+SELECT COALESCE(
+SUM(down_payment),
+0
+)
+FROM installments
+WHERE user_id=$1
+)
+AS total_downpayments,
+
+(
+(
+SELECT COALESCE(
+SUM(down_payment),
+0
+)
+FROM installments
+WHERE user_id=$1
+)
+
++
+
+(
+SELECT COALESCE(
+SUM(d.paid_amount),
+0
+)
 FROM installment_details d
-
 JOIN installments i
 ON i.id=d.installment_id
+WHERE i.user_id=$1
+)
 
+)
+AS total_paid,
+
+(
+(
+SELECT COALESCE(
+SUM(total_amount),
+0
+)
+FROM installments
+WHERE user_id=$1
+)
+
+-
+
+(
+
+(
+SELECT COALESCE(
+SUM(down_payment),
+0
+)
+FROM installments
+WHERE user_id=$1
+)
+
++
+
+(
+SELECT COALESCE(
+SUM(d.paid_amount),
+0
+)
+FROM installment_details d
+JOIN installments i
+ON i.id=d.installment_id
+WHERE i.user_id=$1
+)
+
+)
+
+)
+AS total_remaining,
+
+(
+SELECT COUNT(*)
+FROM installment_details d
+JOIN installments i
+ON i.id=d.installment_id
 WHERE
-
 i.user_id=$1
-
 AND d.paid=false
-
 AND d.due_date<CURRENT_DATE
+)
+AS overdue_count
 `,
-        [user_id]
+[user_id]
 
-      );
+);
 
-    res.json({
+res.json(
+result.rows[0]
+);
 
-      overdue_count:
-        overdueResult
-          .rows[0]
-          .overdue_count,
+}
+catch(err){
 
-      total_customers:
-        customersResult.rows[0].total_customers,
+console.log(err);
 
-      total_installments:
-        installmentsResult.rows[0].total_installments,
+res.status(500).json({
+error:err.message
+});
 
-      total_paid:
-        paidResult.rows[0].total_paid,
-
-      total_unpaid:
-        unpaidResult.rows[0].total_unpaid,
-
-    });
-
-  } catch (err) {
-
-    res.status(500).json({
-      error: err.message,
-    });
-
-  }
+}
 
 });
 
