@@ -4,104 +4,44 @@ const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
 
-router.post('/', auth, async (req, res) => {
 
-    const client = await db.connect();
+// =======================
+// إضافة فاتورة
+// =======================
+router.post('/', auth, async (req, res) => {
 
     try {
 
-        await client.query('BEGIN');
-
         const {
             customer_id,
-            discount = 0,
-            notes = '',
+            invoice_date,
+            subtotal,
+            discount,
+            total_amount,
+            notes,
             items
         } = req.body;
 
         const user_id = req.user.id;
 
-        if (
-            !customer_id ||
-            !items ||
-            items.length === 0
-        ) {
-
-            return res.status(400).json({
-                error: 'Customer and items are required'
-            });
-
-        }
-
-        let subtotal = 0;
-
-        for (const item of items) {
-
-            const itemResult =
-                await client.query(
-
-                    `
-                    SELECT *
-                    FROM items
-                    WHERE id=$1
-                    AND user_id=$2
-                    `,
-
-                    [
-                        item.item_id,
-                        user_id
-                    ]
-
-                );
-
-            if (
-                itemResult.rows.length === 0
-            ) {
-
-                throw new Error(
-                    `Item ${item.item_id} not found`
-                );
-
-            }
-
-            const price =
-                Number(
-                    itemResult.rows[0].price
-                );
-
-            subtotal +=
-                price *
-                Number(item.qty);
-
-        }
-
-        const total_amount =
-            subtotal -
-            Number(discount || 0);
-
         const invoiceResult =
-            await client.query(
+            await db.query(
 
                 `
                 INSERT INTO sales_invoices
                 (
                     customer_id,
                     user_id,
+                    invoice_date,
                     subtotal,
                     discount,
                     total_amount,
-                    status,
-                    notes
+                    notes,
+                    status
                 )
                 VALUES
                 (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5,
-                    'OPEN',
-                    $6
+                    $1,$2,$3,$4,$5,$6,$7,'OPEN'
                 )
                 RETURNING *
                 `,
@@ -109,6 +49,7 @@ router.post('/', auth, async (req, res) => {
                 [
                     customer_id,
                     user_id,
+                    invoice_date,
                     subtotal,
                     discount,
                     total_amount,
@@ -120,72 +61,46 @@ router.post('/', auth, async (req, res) => {
         const invoice =
             invoiceResult.rows[0];
 
-        for (const item of items) {
+        if (items && items.length > 0) {
 
-            const itemResult =
-                await client.query(
+            for (const item of items) {
+
+                await db.query(
 
                     `
-                    SELECT price
-                    FROM items
-                    WHERE id=$1
+                    INSERT INTO sales_invoice_details
+                    (
+                        invoice_id,
+                        item_id,
+                        qty,
+                        price,
+                        total
+                    )
+                    VALUES
+                    (
+                        $1,$2,$3,$4,$5
+                    )
                     `,
 
-                    [item.item_id]
+                    [
+                        invoice.id,
+                        item.item_id,
+                        item.qty,
+                        item.price,
+                        item.total
+                    ]
 
                 );
 
-            const price =
-                Number(
-                    itemResult.rows[0].price
-                );
-
-            const total =
-                price *
-                Number(item.qty);
-
-            await client.query(
-
-                `
-                INSERT INTO sales_invoice_details
-                (
-                    invoice_id,
-                    item_id,
-                    qty,
-                    price,
-                    total
-                )
-                VALUES
-                (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5
-                )
-                `,
-
-                [
-                    invoice.id,
-                    item.item_id,
-                    item.qty,
-                    price,
-                    total
-                ]
-
-            );
+            }
 
         }
-
-        await client.query('COMMIT');
 
         res.json(invoice);
 
     }
 
     catch (err) {
-
-        await client.query('ROLLBACK');
 
         console.log(err);
 
@@ -195,15 +110,12 @@ router.post('/', auth, async (req, res) => {
 
     }
 
-    finally {
-
-        client.release();
-
-    }
-
 });
 
-//كل الفواتير
+
+// =======================
+// كل الفواتير
+// =======================
 router.get('/', auth, async (req, res) => {
 
     try {
@@ -213,12 +125,18 @@ router.get('/', auth, async (req, res) => {
 
                 `
                 SELECT
+
                     s.*,
+
                     c.name AS customer_name
+
                 FROM sales_invoices s
-                INNER JOIN customers c
+
+                LEFT JOIN customers c
                     ON c.id = s.customer_id
+
                 WHERE s.user_id = $1
+
                 ORDER BY s.id DESC
                 `,
 
@@ -234,6 +152,8 @@ router.get('/', auth, async (req, res) => {
 
     catch (err) {
 
+        console.log(err);
+
         res.status(500).json({
             error: err.message
         });
@@ -242,19 +162,36 @@ router.get('/', auth, async (req, res) => {
 
 });
 
-//جلب فاتوره واحده مع التفاصيل
+
+// =======================
+// تفاصيل فاتورة واحدة
+// =======================
 router.get('/:id', auth, async (req, res) => {
 
     try {
 
-        const invoice =
+        const invoiceResult =
             await db.query(
 
                 `
-                SELECT *
-                FROM sales_invoices
-                WHERE id=$1
-                AND user_id=$2
+                SELECT
+
+                    s.*,
+
+                    c.name AS customer_name
+
+                FROM sales_invoices s
+
+                LEFT JOIN customers c
+                    ON c.id = s.customer_id
+
+                WHERE
+
+                    s.id = $1
+
+                AND
+
+                    s.user_id = $2
                 `,
 
                 [
@@ -265,7 +202,7 @@ router.get('/:id', auth, async (req, res) => {
             );
 
         if (
-            invoice.rows.length === 0
+            invoiceResult.rows.length === 0
         ) {
 
             return res.status(404).json({
@@ -274,17 +211,22 @@ router.get('/:id', auth, async (req, res) => {
 
         }
 
-        const details =
+        const detailsResult =
             await db.query(
 
                 `
                 SELECT
+
                     d.*,
+
                     i.name AS item_name
+
                 FROM sales_invoice_details d
-                INNER JOIN items i
-                    ON i.id=d.item_id
-                WHERE d.invoice_id=$1
+
+                LEFT JOIN items i
+                    ON i.id = d.item_id
+
+                WHERE d.invoice_id = $1
                 `,
 
                 [req.params.id]
@@ -294,16 +236,18 @@ router.get('/:id', auth, async (req, res) => {
         res.json({
 
             invoice:
-                invoice.rows[0],
+                invoiceResult.rows[0],
 
             details:
-                details.rows
+                detailsResult.rows
 
         });
 
     }
 
     catch (err) {
+
+        console.log(err);
 
         res.status(500).json({
             error: err.message
@@ -312,5 +256,77 @@ router.get('/:id', auth, async (req, res) => {
     }
 
 });
+
+
+// =======================
+// حذف فاتورة
+// =======================
+router.delete('/:id', auth, async (req, res) => {
+
+    try {
+
+        await db.query(
+
+            `
+            DELETE FROM sales_invoice_details
+            WHERE invoice_id = $1
+            `,
+
+            [req.params.id]
+
+        );
+
+        const result =
+            await db.query(
+
+                `
+                DELETE FROM sales_invoices
+
+                WHERE
+
+                    id = $1
+
+                AND
+
+                    user_id = $2
+
+                RETURNING *
+                `,
+
+                [
+                    req.params.id,
+                    req.user.id
+                ]
+
+            );
+
+        if (
+            result.rows.length === 0
+        ) {
+
+            return res.status(404).json({
+                error: 'Invoice not found'
+            });
+
+        }
+
+        res.json({
+            message: 'Invoice deleted'
+        });
+
+    }
+
+    catch (err) {
+
+        console.log(err);
+
+        res.status(500).json({
+            error: err.message
+        });
+
+    }
+
+});
+
 
 module.exports = router;
