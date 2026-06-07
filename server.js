@@ -5,6 +5,8 @@ const db = require('./db');
 const app = express();
 
 const reportsRoutes=require('./routes/reports');
+const itemsRoutes =
+require('./routes/items');
 
 app.use(cors());
 app.use(express.json());
@@ -14,7 +16,7 @@ app.use('/customers', require('./routes/customers'));
 app.use('/installments', require('./routes/installments'));
 app.use('/payments', require('./routes/payments'));
 app.use('/auth', require('./routes/auth'));
-app.use('/reports',reportsRoutes);
+app.use('/reports',reportsRoutes);app.use('/items',itemsRoutes);
 
 // test
 app.get('/', (req, res) => {
