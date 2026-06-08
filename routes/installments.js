@@ -1552,4 +1552,190 @@ ORDER BY due_date
   }
 );
 
+router.post(
+'/from-invoice',
+auth,
+async (req,res)=>{
+
+try{
+
+const {
+
+sales_invoice_id,
+customer_id,
+total_amount,
+down_payment,
+installment_count,
+installment_value,
+start_date
+
+} = req.body;
+
+const user_id =
+req.user.id;
+
+const installmentResult =
+await db.query(
+
+`
+INSERT INTO installments
+(
+
+customer_id,
+user_id,
+sales_invoice_id,
+total_amount,
+down_payment,
+installment_count,
+installment_value,
+start_date
+
+)
+
+VALUES
+(
+
+$1,
+$2,
+$3,
+$4,
+$5,
+$6,
+$7,
+$8
+
+)
+
+RETURNING *
+`,
+
+[
+customer_id,
+user_id,
+sales_invoice_id,
+total_amount,
+down_payment,
+installment_count,
+installment_value,
+start_date
+]
+
+);
+
+const installment =
+installmentResult.rows[0];
+
+const remaining =
+
+Number(total_amount)
+
+-
+
+Number(down_payment || 0);
+
+for(
+
+let i = 0;
+
+i < Number(installment_count);
+
+i++
+
+){
+
+const dueDate =
+new Date(start_date);
+
+dueDate.setMonth(
+
+dueDate.getMonth()
+
++
+
+i
+
+);
+
+await db.query(
+
+`
+INSERT INTO installment_details
+(
+
+installment_id,
+amount,
+due_date,
+status
+
+)
+
+VALUES
+(
+
+$1,
+$2,
+$3,
+'UNPAID'
+
+)
+`,
+
+[
+installment.id,
+installment_value,
+dueDate
+]
+
+);
+
+}
+
+await db.query(
+
+`
+UPDATE sales_invoices
+
+SET status='INSTALLMENT'
+
+WHERE
+
+id=$1
+
+AND
+
+user_id=$2
+`,
+
+[
+sales_invoice_id,
+user_id
+]
+
+);
+
+res.json({
+
+message:
+'Invoice converted successfully',
+
+installment
+
+});
+
+}
+catch(err){
+
+console.log(err);
+
+res.status(500).json({
+
+error:
+err.message
+
+});
+
+}
+
+});
+
 module.exports = router;
